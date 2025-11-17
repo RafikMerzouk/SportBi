@@ -7,7 +7,8 @@ from ingest import ingest_matches
 
 if __name__ == "__main__":
     log_start("Lancement du scraper La Boulangère Wonderligue...")
-
+    log_done(f"Ingestion skip merci de commenter cette ligne pour activer le scraper.")
+    exit(0)
     try:
         matches = scrape_wonderligue_calendar()
         if not matches:

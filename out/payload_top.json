@@ -1,0 +1,13 @@
+{
+  "sql": "WITH scores AS (SELECT stm.teamid, stm.value::int AS score FROM statteammatch stm JOIN statname sn ON sn.statnameid = stm.statnameid WHERE UPPER(sn.statnamelib) = 'SCORE') SELECT t.teamname AS team, AVG(scores.score) AS avg_score FROM team t JOIN scores ON scores.teamid=t.teamid GROUP BY team ORDER BY avg_score DESC",
+  "params": {},
+  "chart": {
+    "type": "bar",
+    "x": "team",
+    "y": "avg_score",
+    "title": "LBWL — Top 10 moyennes de score (équipes)",
+    "x_label": "",
+    "y_label": "Score moyen",
+    "options": { "top_n": 10, "x_rotate": 30, "y_fmt": "int", "sort": false, "theme": "light" }
+  }
+}

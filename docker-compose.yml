@@ -32,5 +32,42 @@ services:
     command: ["python", "main.py"]
     # on laissera le script vide / neutre tant qu'on n'a pas codé le scraper
 
+  lbwl_explorer:
+    build:
+      context: ./explorer
+    container_name: lbwl_explorer
+    environment:
+      DB_HOST: lbwl_db
+      DB_PORT: 5432
+      DB_NAME: lbwl
+      DB_USER: lbwl_user
+      DB_PASSWORD: lbwl_pass
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8501:8501"
+    restart: unless-stopped
+
+  lbwl_api:
+    build:
+      context: ./api
+    container_name: lbwl_api
+    environment:
+      DB_HOST: lbwl_db
+      DB_PORT: 5432
+      DB_NAME: lbwl
+      DB_USER: lbwl_user
+      DB_PASSWORD: lbwl_pass
+      API_MAX_ROWS: 5000
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+
+
 volumes:
   db_data:
