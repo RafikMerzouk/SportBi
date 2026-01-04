@@ -1,7 +1,0 @@
-HTTP/1.1 200 OK
-date: Mon, 17 Nov 2025 00:12:23 GMT
-server: uvicorn
-content-disposition: inline; filename="chart.png"
-content-length: 103136
-content-type: image/png
-

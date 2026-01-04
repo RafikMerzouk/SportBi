@@ -38,3 +38,4 @@ class RequestSpec(BaseModel):
     sql: str
     params: Optional[Dict[str, Any]] = None
     chart: ChartSpec
+    schema: Optional[str] = None  # permet de cibler un schéma (ligue) pour le search_path

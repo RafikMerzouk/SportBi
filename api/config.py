@@ -14,3 +14,7 @@ ENGINE_URL = (
 API_MAX_ROWS = int(os.getenv("API_MAX_ROWS", "5000"))
 API_QUERY_TIMEOUT = float(os.getenv("API_QUERY_TIMEOUT", "15.0"))
 CORS_ORIGINS = [o.strip() for o in os.getenv("CORS_ORIGINS", "*").split(",")]
+
+# NLP / embeddings
+NLP_AUTO_INDEX = os.getenv("NLP_AUTO_INDEX", "0") == "1"
+NLP_MODEL_NAME = os.getenv("NLP_MODEL_NAME", "sentence-transformers/all-MiniLM-L6-v2")

@@ -20,6 +20,9 @@ services:
   scraper:
     build: ./scraper
     container_name: lbwl_scraper
+    volumes:
+      - ./scraper:/app
+      - ./football_data:/football_data
     depends_on:
       db:
         condition: service_healthy
@@ -29,6 +32,8 @@ services:
       DB_NAME: lbwl
       DB_USER: lbwl_user
       DB_PASSWORD: lbwl_pass
+      FOOTBALL_DATA_API_KEY: 947ede5d58494469ac06930f5d37acb2
+      NBA_START_GAME_ID: '0020400002'
     command: ["python", "main.py"]
     # on laissera le script vide / neutre tant qu'on n'a pas codé le scraper
 
@@ -36,6 +41,8 @@ services:
     build:
       context: ./explorer
     container_name: lbwl_explorer
+    volumes:
+      - ./explorer:/app
     environment:
       DB_HOST: lbwl_db
       DB_PORT: 5432
@@ -53,6 +60,9 @@ services:
     build:
       context: ./api
     container_name: lbwl_api
+    volumes:
+      - ./api:/app/api
+      - ./db:/app/db:ro
     environment:
       DB_HOST: lbwl_db
       DB_PORT: 5432
@@ -60,6 +70,10 @@ services:
       DB_USER: lbwl_user
       DB_PASSWORD: lbwl_pass
       API_MAX_ROWS: 5000
+      NLP_AUTO_INDEX: 1
+      OPENAI_MODEL: gpt-4o-mini
+      OPENAI_API_KEY: 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
+      NLP_MODEL_NAME: sentence-transformers/all-MiniLM-L6-v2
     depends_on:
       db:
         condition: service_healthy

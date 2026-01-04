@@ -1,5 +1,0 @@
-{
-  "sql": "WITH scores AS (SELECT stm.matchid, stm.teamid, stm.value::int AS score FROM statteammatch stm JOIN statname sn ON sn.statnameid = stm.statnameid WHERE UPPER(sn.statnamelib) = 'SCORE') SELECT date_trunc('month', m.startdatematch) AS month, AVG(s.score) AS avg_score FROM match m JOIN scores s ON s.matchid = m.matchid GROUP BY month ORDER BY month",
-  "params": {},
-  "chart": { "type": "line", "x": "month", "y": "avg_score" }
-}

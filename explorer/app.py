@@ -18,6 +18,18 @@ DB_PASSWORD = os.getenv("DB_PASSWORD", "lbwl_pass")
 
 ENGINE_URL = f'postgresql+psycopg2://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}'
 
+# Mapping ligue -> schéma (multi-schémas)
+SCHEMA_MAPPING = {
+    "NBA": "nba",
+    "Liqui Moly StarLigue": "lnh",
+    "La Boulangère Wonderligue": "lbwl",
+    "Premier League": "pl",
+    "Ligue 1 McDonald's": "ligue1",
+    "Bundesliga": "bl1",
+    "Serie A": "sa",
+    "LaLiga": "pd",
+}
+
 
 # =========================
 # Helpers BDD
@@ -27,12 +39,14 @@ def get_engine():
     return create_engine(ENGINE_URL, pool_pre_ping=True)
 
 
-def read_sql_df(q: str, params: dict | None = None, limit: int | None = None) -> pd.DataFrame:
-    """Lecture DataFrame avec LIMIT optionnel si non présent dans la requête."""
+def read_sql_df(q: str, params: dict | None = None, limit: int | None = None, schema: str | None = None) -> pd.DataFrame:
+    """Lecture DataFrame avec LIMIT optionnel si non présent dans la requête et search_path par schéma."""
     sql = q.strip()
     if limit and " limit " not in sql.lower():
         sql = sql.rstrip(";") + f" LIMIT {int(limit)}"
     with get_engine().connect() as conn:
+        if schema:
+            conn.execute(text(f"SET search_path TO {schema},public"))
         return pd.read_sql(text(sql), conn, params=params or {})
 
 
@@ -44,23 +58,38 @@ def export_csv(df: pd.DataFrame, filename: str, label: str = "Télécharger CSV"
 # =========================
 # UI de base
 # =========================
-st.set_page_config(page_title="LBWL Data Explorer", layout="wide")
-st.sidebar.title("🏀 LBWL Explorer")
+st.set_page_config(page_title="SportBi Data Explorer", layout="wide")
+st.sidebar.title("📊 SportBi Explorer")
 page = st.sidebar.radio("Navigation", ["Dashboard", "Matches", "Teams", "SQL (read-only)"])
 
+# Sélection de la ligue (mapping -> schéma)
+LEAGUE_CHOICES = list(SCHEMA_MAPPING.keys())
+selected_league_name = st.sidebar.selectbox("Ligue", LEAGUE_CHOICES, index=LEAGUE_CHOICES.index("NBA") if "NBA" in LEAGUE_CHOICES else 0)
+selected_schema = SCHEMA_MAPPING.get(selected_league_name)
 
-# =========================
-# Pré-chargements sûrs (avec alias corrects)
-# =========================
+# Charger leagueId de ce schéma (s'il existe)
+try:
+    league_row = read_sql_df('SELECT leagueId AS "leagueId", leagueName AS "leagueName" FROM league LIMIT 1;', schema=selected_schema)
+    if league_row is None or league_row.empty:
+        st.error(f"Aucune ligue trouvée dans le schéma {selected_schema}. Lance un scraper puis recharge.")
+        st.stop()
+    selected_league_id = league_row.iloc[0]["leagueId"]
+except Exception as e:
+    st.error(f"Connexion BDD impossible : {e}")
+    st.stop()
+
+# Teams du schéma
 try:
     teams_df = read_sql_df(
         """
         SELECT
           teamid   AS "teamId",
-          teamname AS "teamName"
+          teamname AS "teamName",
+          leagueid AS "leagueId"
         FROM team
         ORDER BY teamname;
-        """
+        """,
+        schema=selected_schema,
     )
 except Exception as e:
     st.error(f"Connexion BDD impossible : {e}")
@@ -83,10 +112,24 @@ if page == "Dashboard":
     # KPIs rapides
     cols = st.columns(4)
     try:
-        k_leagues = read_sql_df('SELECT COUNT(*) AS "count" FROM league;').iloc[0]["count"]
-        k_teams   = read_sql_df('SELECT COUNT(*) AS "count" FROM team;').iloc[0]["count"]
-        k_match   = read_sql_df('SELECT COUNT(*) AS "count" FROM match;').iloc[0]["count"]
-        k_stats   = read_sql_df('SELECT COUNT(*) AS "count" FROM statTeamMatch;').iloc[0]["count"]
+        k_leagues = read_sql_df('SELECT COUNT(*) AS "count" FROM league;', schema=selected_schema).iloc[0]["count"]
+
+        k_teams = read_sql_df(
+            'SELECT COUNT(*) AS "count" FROM team;',
+            schema=selected_schema,
+        ).iloc[0]["count"]
+        k_match = read_sql_df(
+            'SELECT COUNT(*) AS "count" FROM match;',
+            schema=selected_schema,
+        ).iloc[0]["count"]
+        k_stats = read_sql_df(
+            """
+            SELECT COUNT(*) AS "count"
+            FROM statTeamMatch stm
+            JOIN match m ON m.matchid = stm.matchid
+            """,
+            schema=selected_schema,
+        ).iloc[0]["count"]
     except Exception as e:
         st.error(f"Erreur chargement métriques : {e}")
     else:
@@ -130,10 +173,10 @@ if page == "Dashboard":
       LIMIT 30;
     """
     try:
-        df_last = read_sql_df(q_last)
+        df_last = read_sql_df(q_last, schema=selected_schema)
         st.dataframe(df_last, use_container_width=True, height=460)
         if not df_last.empty:
-            export_csv(df_last, "lbwl_last_matches.csv", "Exporter (CSV)")
+            export_csv(df_last, "sportbi_last_matches.csv", "Exporter (CSV)")
     except Exception as e:
         st.info("Pas encore de données ou jointure différente. Scrappe d’abord puis reviens 😉")
 
@@ -188,11 +231,13 @@ elif page == "Matches":
       JOIN teams_per_match tpm ON tpm."matchId" = m.matchid
       LEFT JOIN score sc ON sc."matchId" = m.matchid
       WHERE m.startdatematch BETWEEN :dmin AND :dmax
+        AND (:lid IS NULL OR m.leagueid = :lid)
     """
 
     params = {
         "dmin": f"{d_start} 00:00:00",
         "dmax": f"{d_end} 23:59:59",
+        "lid": selected_league_id,
     }
 
     if sel_home != "(Tous)":
@@ -205,7 +250,7 @@ elif page == "Matches":
     base_q += ' GROUP BY m.startdatematch, tpm."teams" ORDER BY "date" DESC '
 
     try:
-        dfm = read_sql_df(base_q, params=params, limit=1000)
+        dfm = read_sql_df(base_q, params=params, limit=1000, schema=selected_schema)
         st.dataframe(dfm, use_container_width=True, height=560)
         if not dfm.empty:
             export_csv(dfm, "lbwl_matches_filtered.csv", "Exporter (CSV)")
@@ -223,20 +268,18 @@ elif page == "Teams":
     q = """
       SELECT
         t.teamname AS "team",
-        l.leaguename AS "league",
         COUNT(DISTINCT m.matchid) AS "matches_count"
       FROM team t
-      LEFT JOIN league l ON l.leagueid = t.leagueid
       LEFT JOIN statTeamMatch stm ON stm.teamid = t.teamid
       LEFT JOIN match m ON m.matchid = stm.matchid
-      GROUP BY t.teamname, l.leaguename
+      GROUP BY t.teamname
       ORDER BY "matches_count" DESC NULLS LAST, "team" ASC;
     """
     try:
-        dft = read_sql_df(q)
+        dft = read_sql_df(q, params=None, schema=selected_schema)
         st.dataframe(dft, use_container_width=True, height=620)
         if not dft.empty:
-            export_csv(dft, "lbwl_teams_overview.csv", "Exporter (CSV)")
+            export_csv(dft, "sportbi_teams_overview.csv", "Exporter (CSV)")
     except Exception as e:
         st.error(f"Erreur : {e}")
 
@@ -259,7 +302,7 @@ elif page == "SQL (read-only)":
             st.error("Seules les requêtes SELECT sont autorisées ici.")
         else:
             try:
-                dfs = read_sql_df(q, limit=limit)
+                dfs = read_sql_df(q, limit=limit, schema=selected_schema)
                 st.success(f"{len(dfs)} ligne(s)")
                 st.dataframe(dfs, use_container_width=True, height=620)
                 if not dfs.empty:

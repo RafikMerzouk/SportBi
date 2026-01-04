@@ -11,6 +11,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 RUN apt-get update && apt-get install -y --no-install-recommends \
       build-essential gcc libpq-dev \
       libfreetype6 libjpeg62-turbo libpng16-16 \
+      libexpat1 libglib2.0-0 libfontconfig1 \
       ca-certificates curl \
     && rm -rf /var/lib/apt/lists/*
 

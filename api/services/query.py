@@ -7,13 +7,15 @@ from ..db import engine
 from ..config import API_MAX_ROWS, API_QUERY_TIMEOUT
 from ..security import validate_sql_is_safe
 
-def run_query_df(sql: str, params: dict | None) -> pd.DataFrame:
+def run_query_df(sql: str, params: dict | None, schema: str | None = None) -> pd.DataFrame:
     validate_sql_is_safe(sql)
     params = params or {}
     if " limit " not in sql.lower():
         sql = sql.rstrip() + f" LIMIT {API_MAX_ROWS}"
     start = time.time()
     with engine.connect() as conn:
+        if schema:
+            conn.execute(text(f"SET search_path TO {schema},public"))
         df = pd.read_sql(text(sql), conn, params=params)
     if time.time() > start + API_QUERY_TIMEOUT:
         raise HTTPException(status_code=408, detail="Temps d’exécution dépassé")
