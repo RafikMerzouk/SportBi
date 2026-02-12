@@ -315,4 +315,4 @@ git commit -m "Ajout nouvelle fonctionnalité"
 
 ## Licence
 
-Projet open source — licence à définir.
+All rights reserved
